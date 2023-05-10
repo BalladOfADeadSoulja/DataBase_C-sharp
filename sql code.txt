@@ -1,0 +1,163 @@
+-- Database: Lab
+
+-- DROP DATABASE IF EXISTS "Lab";
+
+CREATE DATABASE "Lab"
+    WITH
+    OWNER = postgres
+    ENCODING = 'UTF8'
+    LC_COLLATE = 'English_United States.1252'
+    LC_CTYPE = 'English_United States.1252'
+    TABLESPACE = pg_default
+    CONNECTION LIMIT = -1
+    IS_TEMPLATE = False;
+
+--Создание таблицы ГРУППЫ
+create table public.group(
+ id bigserial primary key,
+ name varchar(30) not null unique,
+ number_of_students int not null check (number_of_students >= 1)
+);
+--Создание таблицы СТУДЕНТЫ
+create table public.student(
+ id bigserial primary key,
+ name varchar(30) not null,
+ surname varchar(30) not null,
+ middle_name varchar(30),
+ id_group bigint not null references public.group(id),
+ address varchar(100),
+ cource int check (cource >= 1 and cource <=5)
+);
+--Создание таблицы ПРЕДМЕТЫ
+create table public.subject(
+ id bigserial primary key,
+ name varchar(50) not null unique,
+ number_of_hours int not null check (number_of_hours > 0)
+);
+--Создание таблицы УСПЕВАЕМОСТЬ
+create table public.progress(
+ id_student bigint not null references public.student(id),
+ id_subject bigint not null references public.subject(id),
+ rating int check (rating >= 2 and rating <=5)
+);
+--Создание типа перечисления для обозначения должности преподавателя
+create type public.position_type_enum as enum (
+ 'docent', 'professor', 'senior lecturer', 'instructor');
+--Создание таблицы ПРЕПОДОВАТЕЛИ
+create table public.teacher(
+ id bigserial primary key,
+ name varchar(30) not null,
+ surname varchar(30) not null,
+ middle_name varchar(30),
+ position public.position_type_enum not null default 'instructor',
+ phone_number varchar(30)
+);
+--Создание типа перечисления для обозначения типа проводимого занятия
+create type public.occupation_type_enum as enum (
+ 'lecture', 'laboratory work', 'practical lesson', 'seminar');
+--Создание таблицы ТИП ЗАНЯТИЯ
+create table public.type_of_occupation(
+ id_subject bigint not null references
+public.subject(id),
+ id_teacher bigint not null references
+public.teacher(id),
+occupation_type public.occupation_type_enum not null
+ default 'lecture'
+);
+
+
+
+--Заполнение таблиц
+do $$
+declare
+ groupID bigint;
+ subjectID bigint;
+ teacherID bigint;
+ student1 bigint;
+ student2 bigint;
+ student3 bigint;
+ student4 bigint;
+begin
+insert into "group"(name, number_of_students)
+values ('ИВТб-3301-01-00', 15)
+returning id into groupID;
+insert into student(name, surname, middle_name, id_group, address, cource)
+values ('Николай', 'Котов', 'Сергеевич', groupID, 'г. Киров ул. Ломоносова
+16а', 3)
+returning id into student1;
+insert into student(name, surname, middle_name, id_group, address, cource)
+values ('Василий', 'Олоев', 'Петрович', groupID, 'г. Киров ул. Свободы 4', 3)
+returning id into student2;
+insert into "group"(name, number_of_students)
+values ('ИВТб-3302-02-00', 20)
+returning id into groupID;
+insert into student(name, surname, middle_name, id_group, address, cource)
+values ('Олег', 'Зотов', 'Георгиевич', groupID, 'г. Киров ул. Воровского
+122', 3)
+returning id into student3;
+insert into "group"(name, number_of_students)
+values ('ИВТб-4301-01-00', 12)
+returning id into groupID;
+insert into student(name, surname, middle_name, id_group, address, cource)
+values ('Константин', 'Романов', 'Владимирович', groupID, 'г. Киров ул.
+Ленина 52', 4)
+returning id into student4;
+insert into subject(name, number_of_hours)
+values ('Технологии программирования', 18)
+returning id into subjectID;
+insert into teacher(name, surname, middle_name, position, phone_number)
+values ('Семен', 'Катаев', 'Петрович', 'instructor', '89530000000')
+returning id into teacherID;
+insert into type_of_occupation(id_subject, id_teacher, occupation_type)
+values (subjectID, teacherID, 'laboratory work');
+insert into progress(id_subject, id_student, rating)
+values (subjectID, student1, 4);
+insert into progress(id_subject, id_student, rating)
+values (subjectID, student2, 5);
+insert into teacher(name, surname, middle_name, position, phone_number)
+values ('Ирина', 'Коснырева', 'Олеговна', 'docent', '89530000002')
+returning id into teacherID;
+insert into type_of_occupation(id_subject, id_teacher, occupation_type)
+values (subjectID, teacherID, 'lecture');
+insert into subject(name, number_of_hours)
+values ('История', 36)
+returning id into subjectID;
+insert into teacher(name, surname, middle_name, position, phone_number)
+values ('Дмитрий', 'Мусанов', 'Алексеевич', 'professor', '89530000001')
+returning id into teacherID;
+insert into type_of_occupation(id_subject, id_teacher, occupation_type)
+values (subjectID, teacherID, 'lecture');
+insert into progress(id_subject, id_student, rating)
+values (subjectID, student4, 5);
+insert into progress(id_subject, id_student, rating)
+values (subjectID, student2, 4);
+insert into progress(id_subject, id_student, rating)
+values (subjectID, student3, 3);
+end;
+$$ language plpgsql;
+--Создание представлений
+create or replace view students_groups_v as
+ select s.name, s.middle_name, s.surname, s.cource, g.name as group_name
+ from student s, "group" g
+ where s.id_group = g.id;
+create or replace view students_progress_subject_v as
+select s.name, s.middle_name, s.surname, s.cource, su.name as subject,
+p.rating
+ from student s join progress p on s.id = p.id_student join subject su on
+p.id_subject = su.id;
+create or replace view teachers_subjects_v as
+ select t.name, t.middle_name, t.surname, t.position, s.name as subject,
+too.occupation_type
+ from teacher t, subject s, type_of_occupation too
+ where t.id = too.id_teacher and s.id = too.id_subject;
+--Создание представления с числовыми данными
+create or replace view subjects_v as
+ (select 'Минимальное значение', number_of_hours, id from subject order by
+number_of_hours asc limit 1)
+union all
+ (select 'Максимальное значение', number_of_hours, id from subject order by
+number_of_hours desc limit 1)
+union all
+select 'Среднее значение', avg(s.number_of_hours), null from subject s
+union all
+select 'Сумма значений', sum(s.number_of_hours), null from subject s;
